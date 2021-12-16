@@ -1,0 +1,23 @@
+Package: ESAedcrowding
+Type: Package
+Title: Economics & Strategic Analysis Team's ED crowding model
+Version: 0.1.0
+Author: Economics & Strategic Analysis Team <econstrat.analysis@nhs.net>
+Maintainer: Economics & Strategic Analysis Team
+Description: 
+License: MIT
+Encoding: UTF-8
+LazyData: true
+Imports:
+  data.table,
+  odbc,
+  DBI,
+  fixest,
+  Rcpp (>= 1.0.7),
+  R6,
+  ggplot2,
+  marginaleffects,
+  broom
+RoxygenNote: 7.1.1
+Suggests: 
+

@@ -1,0 +1,3 @@
+import(data.table)
+import(R6)
+exportPattern("^[[:alpha:]]+")
