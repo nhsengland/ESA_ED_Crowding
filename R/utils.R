@@ -4,7 +4,9 @@
 #' @param odbcQuery String: The sql query to execute via the ODBC connection
 #' @return A data.table of the ODBC connections' response
 #' @example
-#' getDataFromODBC("ncdr", "select * from dbo)
+#'  \dontrun{
+#'  getDataFromODBC("ncdr", "select * from dbo)
+#' }
 #' @export
 getDataFromODBC <- function(odbcName, odbcQuery){
 
@@ -13,11 +15,11 @@ getDataFromODBC <- function(odbcName, odbcQuery){
       # establish odbc connection
       cxn <- DBI::dbConnect(odbc::odbc(), odbcName)
       # send odbcQuery
-      cxnQuery <- dbSendQuery(cxn, odbcQuery)
+      cxnQuery <- DBI::dbSendQuery(cxn, odbcQuery)
       # get the response
-      cxnResponse <- dbFetch(cxnQuery)
+      cxnResponse <- DBI::dbFetch(cxnQuery)
       # return data.table of response
-      return(setDT(cxnResponse))
+      return(data.table::setDT(cxnResponse))
     },
     error=function(cond){
       message(paste("An error occured connecting to: ", odbcName))
@@ -104,8 +106,8 @@ unique.vector <- function(vector){
 #' @param x vector to search
 #' @param y vector of endsWiths
 #' @return vector of booleans
-#' @examples
-#' vector.endsWith(c('hello', 'world'), c('ld')) returns FALSE TRUE
+#' @example
+#' vector.endsWith(c('hello', 'world'), c('ld'))
 vector.endsWith <- function(x,y){
   # for all elements in x, see if it ends with an element in y
   find <- lapply(x, endsWith, suffix=paste(y))

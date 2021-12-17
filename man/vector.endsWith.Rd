@@ -17,6 +17,3 @@ vector of booleans
 \description{
 Check whether element in x ends in any item in y
 }
-\examples{
-vector.endsWith(c('hello', 'world'), c('ld')) returns FALSE TRUE
-}

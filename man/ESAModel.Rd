@@ -38,6 +38,7 @@ Description:
 \item \href{#method-getRegressionDatasets}{\code{ESAModel$getRegressionDatasets()}}
 \item \href{#method-getSampleAvgs}{\code{ESAModel$getSampleAvgs()}}
 \item \href{#method-getRegressionTable}{\code{ESAModel$getRegressionTable()}}
+\item \href{#method-getAMEs}{\code{ESAModel$getAMEs()}}
 \item \href{#method-clone}{\code{ESAModel$clone()}}
 }
 }
@@ -53,7 +54,8 @@ Description:
   slotVars = NULL,
   nonSlotVars = NULL,
   fixedEffects = NULL,
-  printSummary = FALSE
+  printSummary = FALSE,
+  withAME = FALSE
 )}\if{html}{\out{</div>}}
 }
 
@@ -139,6 +141,15 @@ Description:
 \subsection{Method \code{getRegressionTable()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{ESAModel$getRegressionTable(exclusions = NULL)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getAMEs"></a>}}
+\if{latex}{\out{\hypertarget{method-getAMEs}{}}}
+\subsection{Method \code{getAMEs()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{ESAModel$getAMEs()}\if{html}{\out{</div>}}
 }
 
 }
