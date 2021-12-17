@@ -1,5 +1,5 @@
 #' Title: ESAAdmittedAggregated
-#' Author: Edmund Haacke
+#' Author: Economics and Strategic Analysis Team
 #' Date created: 22.09.2021
 #' Date modified: 22.09.2021
 #' Changelog:
