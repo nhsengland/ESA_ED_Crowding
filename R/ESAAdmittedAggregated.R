@@ -98,11 +98,11 @@ ESAAdmittedAggregated <- R6Class(
                                         episodeNo = private$col.episodeNo))
     },
     longStayPatients=function(){
-      return(private$longStayPatients(data=private$cleanedRawData,
-                                      kSpellIdent=private$col.spellIdent,
-                                      episodeStartDate=private$col.episodeStartDate,
-                                      episodeEndDate=private$col.episodeEndDate,
-                                      siteCode=private$providerSite))
+      return(private$longStayPatients_allDays(data=private$cleanedRawData,
+                                              kSpellIdent=private$col.spellIdent,
+                                              episodeStartDate=private$col.episodeStartDate,
+                                              episodeEndDate=private$col.episodeEndDate,
+                                              siteCode=private$providerSite))
     },
     # getter methods
     getRawCleanedData=function(){
@@ -365,7 +365,7 @@ ESAAdmittedAggregated <- R6Class(
       colnames(df)[colnames(df) == 'provider_site'] <- private$providerSite
       return(df)
     },
-    longStayPatients=function(data,kSpellIdent,episodeStartDate, episodeEndDate,siteCode){
+    longStayPatients_allDays=function(data,kSpellIdent,episodeStartDate, episodeEndDate,siteCode){
       message('commencing long stay patients (all days) calculation...')
       cols <- c(siteCode, episodeStartDate, episodeEndDate,kSpellIdent)
       df <- data[,..cols]
