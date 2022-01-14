@@ -417,7 +417,7 @@ ESAModel <- R6Class(
         model.df <- data.table::copy(obj$data)
         model.vars <- all.vars(formuli[[x]])
         cols.retain <- unique(c(obj$getProviderSite(),'final_date',model.vars))
-        #model.df <- model.df[,..cols.retain]
+        model.df <- model.df[,..cols.retain]
         model.df[,is_complete_case:=FALSE]
         model.df[complete.cases(model.df[,..model.vars]),is_complete_case:=TRUE]
         return(model.df)
@@ -560,8 +560,9 @@ ESAModel <- R6Class(
         # remove .mean, .max, .min from varname
         stats[, varname := gsub('\\.mean|\\.max|\\.min', '', varname)]
         slotsName <- gsub(pattern=private$getModelSuff(private$esaEDObj),'',x)
+        stats[, metric := paste0(slotsName,metric)]
         # reshape wide so that min, max and mean are in seperate columns
-        statsWide <- dcast(stats, formula=varname~paste0(slotsName,metric), value.var='value', fill=NA)
+        statsWide <- dcast(stats, formula=varname~metric, value.var=c('value'), fill=NA)
         # calculate for factor variables
         cols.factors <- names(which(unlist(lapply(df, is.factor))))
         factorCounts <- lapply(cols.factors, function(y){

@@ -19,6 +19,6 @@ The purpose of the code is for other users within the NHS system, to take this w
 ## Usage
 We rely on hospital activity data from the Secondary Uses Service repository. However, the user is free to rely on their own data-sources, provided the relevant data points are present. We implement R6 classes to clean, prepare, derive and aggregate data for both (admitted) inpatients, and emergency department attendances. Whilst some level of data cleaning is present, when using data other than SUS, it is recommended that data be adequately prepared beforehand. Furthermore, it is easy to supplement the aforementioned datasets with other relevant data, we do so utilising NHS England and NHS Improvement Situation Reports (SitReps).
 
-# Hospital inpatients
+### Hospital inpatients
 
 
