@@ -97,17 +97,12 @@ ESAAdmittedAggregated <- R6Class(
                                          episodeStartDate=private$col.episodeStartDate,
                                         episodeNo = private$col.episodeNo))
     },
-    longStayPatients_days21=function(){
-      return(private$longStayPatients_21Days(data=private$cleanedRawData,
-                                             episodeStartDate=private$col.episodeStartDate,
-                                             episodeEndDate=private$col.episodeEndDate,
-                                             siteCode=private$providerSite))
-    },
-    longStayPatients_daysAll=function(){
-      return(private$longStayPatients_allDays(data=private$cleanedRawData,
-                                              episodeStartDate=private$col.episodeStartDate,
-                                              episodeEndDate=private$col.episodeEndDate,
-                                              siteCode=private$providerSite))
+    longStayPatients=function(){
+      return(private$longStayPatients(data=private$cleanedRawData,
+                                      kSpellIdent=private$col.spellIdent,
+                                      episodeStartDate=private$col.episodeStartDate,
+                                      episodeEndDate=private$col.episodeEndDate,
+                                      siteCode=private$providerSite))
     },
     # getter methods
     getRawCleanedData=function(){
@@ -370,62 +365,32 @@ ESAAdmittedAggregated <- R6Class(
       colnames(df)[colnames(df) == 'provider_site'] <- private$providerSite
       return(df)
     },
-    longStayPatients_allDays=function(data, episodeStartDate, episodeEndDate, siteCode){
+    longStayPatients=function(data,kSpellIdent,episodeStartDate, episodeEndDate,siteCode){
       message('commencing long stay patients (all days) calculation...')
-      cols <- c(siteCode, episodeStartDate, episodeEndDate)
+      cols <- c(siteCode, episodeStartDate, episodeEndDate,kSpellIdent)
       df <- data[,..cols]
-      # calculate episode length of stay
-      df[, los := df[[episodeEndDate]]-df[[episodeStartDate]]]
-      # flag for whether long stay patient
-      df[, long_stay_patients_all_days := as.integer(los>=21)]
       names(df)[names(df)==episodeStartDate] <- 'kEpStartDate'
       names(df)[names(df)==episodeEndDate] <- 'kEpEndDate'
+      # grouping by site and spell, find the start and end of the spell
+      df <- df[,.(
+        kSpellStartDate=min(kEpStartDate,na.rm=TRUE),
+        kSpellEndDate=max(kEpEndDate,na.rm=TRUE)
+      ),by=c(siteCode,kSpellIdent)]
+      # calculate episode length of stay
+      df[, los := kSpellEndDate-kSpellStartDate]
+      # flag for whether long stay patient
+      df[, long_stay_patients_all_days := as.integer(los>=21)]
       names(df)[names(df)==siteCode] <- 'kSiteCode'
       # expand sequence between episode start and episode end date
       df <- df[,.(
         provider_site = kSiteCode,
         long_stay_patients_all_days = long_stay_patients_all_days,
-        final_date = seq(kEpStartDate, kEpEndDate,by='day')
+        final_date = seq(kSpellStartDate, kSpellEndDate,by='day')
       ), by=seq_len(nrow(df))]
       # group by provider site & final date, sum long stay patients
       df <- df[, .(long_stay_patients_all_days=sum(long_stay_patients_all_days,na.rm=TRUE)),
                by=c('provider_site', 'final_date')]
       colnames(df)[colnames(df) == 'provider_site'] <- private$providerSite
-      return(df)
-    },
-    longStayPatients_21Days=function(data, episodeStartDate, episodeEndDate, siteCode){
-      message('commencing long stay patients (21+ days) calculation...')
-      cols <- c(siteCode, episodeStartDate, episodeEndDate)
-      df <- data[,..cols]
-
-      # calculate episode length of stay
-      df[, los := df[[episodeEndDate]]-df[[episodeStartDate]]]
-      names(df)[names(df)==episodeEndDate] <- 'kEpEndDate'
-      names(df)[names(df)==siteCode] <- 'kSiteCode'
-      names(df)[names(df)==episodeStartDate] <- 'kEpStartDate'
-
-      # split sample into those where are over 21 days and those who aren't
-      over21 <- df[los>=21]
-      under21 <- df[los<21]
-
-      # set offset day, 21 days from episode start date for over 21 day people
-      over21[, kEpStartDate := as.Date(kEpStartDate)+21]
-      over21[, long_stay := 1]
-      under21[, long_stay := 0]
-      # expand sequence between episode start and episode end date
-      over21 <- over21[, .(provider_site=kSiteCode,
-                           long_stay=long_stay,
-                           final_date=seq(kEpStartDate,kEpEndDate,by='day')),
-                       by=seq_len(nrow(over21))]
-      under21 <- under21[, .(provider_site=kSiteCode,
-                             long_stay=long_stay,
-                             final_date=seq(kEpStartDate,kEpEndDate,by='day')),
-                         by=seq_len(nrow(under21))]
-      df <- rbindlist(list(over21,under21),use.names=TRUE)
-      # group by final date and provider site
-      df <- df[, .(long_stay_patients_21_days = sum(long_stay, na.rm=TRUE)),
-               by=c('provider_site', 'final_date')]
-      colnames(df)[colnames(df)=='provider_site'] <-private$providerSite
       return(df)
     }
   )
