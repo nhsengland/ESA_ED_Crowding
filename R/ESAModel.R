@@ -15,14 +15,25 @@ ESAModel <- R6Class(
                         slotVars=NULL,
                         nonSlotVars=NULL,
                         fixedEffects=NULL,
+                        vcovFn=NULL,
+                        vcovArgs=NULL,
                         printSummary=FALSE,
                         withAME=FALSE){
       if(!is(ESAEDAggregated, 'ESAEDAggregated')){
         stop('ESAEDAggregated must be ESAEDAggregated Object.')
       }
+      # check vcov is function and vcovargs is list if fixed effects is null
+      if (is.null(fixedEffects)){
+        if (!is.null(vcovArgs)){
+          if (!is(vcovArgs,list)){
+            stop('vcovArgs must be list if not null')
+          }
+        }
+      }
       private$esaEDObj <- ESAEDAggregated
       private$bedOccupancyVars <- bedOccupancy
       private$modelType <- model.type
+      private$fixedEffects <- fixedEffects
       # get formuli
       formuli <- private$getFormulas(obj=ESAEDAggregated,
                                      bedOccupancy=bedOccupancy,
@@ -34,7 +45,10 @@ ESAModel <- R6Class(
                         formuli=formuli,
                         model.type=model.type,
                         printSummary=printSummary,
-                        withAME=withAME)
+                        withAME=withAME,
+                        fixedEffects=fixedEffects,
+                        vcovFn=vcovFn,
+                        vcovArgs=vcovArgs)
     },
     runScenario=function(scenario){
       if(!is(scenario,'ESAModelScenario')){
@@ -309,19 +323,28 @@ ESAModel <- R6Class(
       }
       # create exclusions string if there are any
       exclude <- ifelse(is.null(exclusions),'!',paste(paste0('^',exclusions),collapse='|',sep=''))
+      # some vectors of model statistics
+      extralineList <- list()
+      omitColinear <- unlist(lapply(u,function(x) paste(x$collin.var,collapse=',',sep='')))
+      numOmitColinear <- unlist(lapply(u,function(x) length(x$collin.var)))
+      feSize <- unlist(lapply(u,function(x) x$fixef_sizes))
+      aic <- unlist(lapply(u,function(x) AIC(x)))
+      bic <- unlist(lapply(u,function(x) BIC(x)))
+      if (!is.null(omitColinear)) extralineList[['^_Omitted due to collinearity']] <- omitColinear
+      if (!is.null(numOmitColinear)) extralineList[['^_Number omitted due to collinear']] <- numOmitColinear
+      if (!is.null(feSize)) extralineList[['^_Fixed effect size']] <- feSize
+      if (!is.null(aic)) extralineList[['^_AIC']] <- aic
+      if (!is.null(bic)) extralineList[['^_BIC']] <- bic
       # return a data.frame via fixest's etable method, with some additional stats
       return(etable(u,drop=exclude,
-                    extraline=list(
-                      '^_Omitted due to collinearity'=unlist(lapply(u,function(x) paste(x$collin.var,collapse=',',sep=''))),
-                      '^_Number omitted due to collinear'=unlist(lapply(u,function(x) length(x$collin.var))),
-                      '^_Fixed Effect Size'=unlist(lapply(u,function(x) x$fixef_sizes)),
-                      '^_AIC'=unlist(lapply(u,function(x) AIC(x))),
-                      '^_BIC'=unlist(lapply(u,function(x) BIC(x)))
-                    ),
+                    extraline=extralineList,
                     dict = subRepl))
     },
     getAMEs = function(){
       return(private$modelAMEs)
+    },
+    getModelObjs=function(){
+      return(private$modelObjects)
     }
   ),
   private=list(
@@ -333,7 +356,8 @@ ESAModel <- R6Class(
     modelType=NULL,
     modelObjects=list(),
     modelAMEs=NULL,
-    getFormulas=function(obj, bedOccupancy=NULL, slotVars=NULL, nonSlotVars=NULL, fixedEffects=NULL){
+    fixedEffects=NULL,
+    getFormulas=function(obj, bedOccupancy=NULL, slotVars=NULL, nonSlotVars=NULL,fixedEffects=NULL){
       # method to get formulas for the various slot models. return labeled
       # list containing a formula object.
       queue <- obj$getQueue()
@@ -361,7 +385,7 @@ ESAModel <- R6Class(
       }
       return(formuli)
     },
-    runModels=function(obj, formuli, model.type, printSummary, withAME){
+    runModels=function(obj,formuli,model.type,printSummary,withAME,fixedEffects,vcovFn,vcovArgs){
       # create empty results dataframe to store results of all the models...
       results.cols <- c('factor','estimate','std_err','t_value','p_value',
                         'lower_ci_90','upper_ci_90','lower_ci_95','upper_ci_95',
@@ -373,9 +397,9 @@ ESAModel <- R6Class(
         model <- tryCatch({
           message(paste0('running model... ',x))
           if (model.type=='poisfe'){
-            model <- fepois(formuli[[x]], data=reg.df, cluster=paste0(obj$getProviderSite()), glm.iter = 100)
+            model <- fepois(formuli[[x]], data=reg.df, cluster=fixedEffects, glm.iter = 100)
           } else if (model.type=='olsfe'){
-            model <- feols(formuli[[x]], data=reg.df, cluster=paste0(obj$getProviderSite()))
+            model <- feols(formuli[[x]], data=reg.df, cluster=fixedEffects)
           } else {
             stop('Invalid model detected.')
           }
@@ -391,14 +415,27 @@ ESAModel <- R6Class(
           return(NULL)
         })
         if (!is.null(model)){
-          if (printSummary){
-            print(summary(model))
-            print(model$collin.var)
+          res <- NULL
+          if (!is.null(fixedEffects)|(is.null(fixedEffects)&is.null(vcovFn))){
+            # if fixed effects in use, then use summary from fixest package
+            if (printSummary){
+              print(summary(model))
+              print(model$collin.var)
+            }
+            res <- cbind(coeftable(model), confint(model,level=0.9))
+            res <- cbind(res, confint(model,level=0.95))
+          } else if (is.null(fixedEffects)&!is.null(vcovFn)){
+            # pass thru a variance co-variance function
+            vcovNew <- do.call(vcovFn,args=append(list(x=model),vcovArgs))
+            vcovRes <- lmtest::coeftest(model,vcov=vcovNew)
+            resbase <- broom::tidy(vcovRes)
+            if (printSummary){
+              print(vcovRes)
+              print(model$collin.var)
+            }
+            res <- cbind(vcovRes, confint(vcovRes,level=0.9))
+            res <- cbind(res, confint(vcovRes,level=0.95))
           }
-
-          # bind 90% CIs
-          res <- cbind(coeftable(model), confint(model,level=0.9))
-          res <- cbind(res, confint(model,level=0.95))
           # create data.table of results
           res <- setDT(as.data.frame(res), keep.rownames=TRUE)[]
           res[, model_key := paste0(x)]
