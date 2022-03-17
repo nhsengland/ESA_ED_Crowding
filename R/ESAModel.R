@@ -393,6 +393,10 @@ ESAModel <- R6Class(
                         'model_key')
       reg.df <- data.table::copy(obj$data)
       reg.df[, paste0(obj$getProviderSite()) := as.factor(reg.df[[obj$getProviderSite()]])]
+      # force clustering on final_date if there is only one site
+      if (length(unique(reg.df[[obj$getProviderSite()]]))==1 & is.null(cl) & is.null(fixedEffects)){
+        cl <- 'final_date'
+      }
       # run all the models within the list of formuli
       model.results <- lapply(names(formuli), function(x){
         model <- tryCatch({
