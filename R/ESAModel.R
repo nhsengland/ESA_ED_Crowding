@@ -15,17 +15,18 @@ ESAModel <- R6Class(
                         slotVars=NULL,
                         nonSlotVars=NULL,
                         fixedEffects=NULL,
-                        vcovFn=NULL,
-                        vcovArgs=NULL,
+                        clusterSE=NULL,
                         printSummary=FALSE,
-                        withAME=FALSE){
+                        withAME=FALSE,
+                        vcovFn=NULL,
+                        vcovArgs=NULL){
       if(!is(ESAEDAggregated, 'ESAEDAggregated')){
         stop('ESAEDAggregated must be ESAEDAggregated Object.')
       }
       # check vcov is function and vcovargs is list if fixed effects is null
       if (is.null(fixedEffects)){
         if (!is.null(vcovArgs)){
-          if (!is(vcovArgs,list)){
+          if (!is(vcovArgs,'list')){
             stop('vcovArgs must be list if not null')
           }
         }
@@ -48,7 +49,7 @@ ESAModel <- R6Class(
                         withAME=withAME,
                         fixedEffects=fixedEffects,
                         vcovFn=vcovFn,
-                        vcovArgs=vcovArgs)
+                        vcovArgs=vcovArgs,cl=clusterSE)
     },
     runScenario=function(scenario){
       if(!is(scenario,'ESAModelScenario')){
@@ -385,7 +386,7 @@ ESAModel <- R6Class(
       }
       return(formuli)
     },
-    runModels=function(obj,formuli,model.type,printSummary,withAME,fixedEffects,vcovFn,vcovArgs){
+    runModels=function(obj,formuli,model.type,printSummary,withAME,fixedEffects,vcovFn,vcovArgs,cl){
       # create empty results dataframe to store results of all the models...
       results.cols <- c('factor','estimate','std_err','t_value','p_value',
                         'lower_ci_90','upper_ci_90','lower_ci_95','upper_ci_95',
@@ -396,10 +397,11 @@ ESAModel <- R6Class(
       model.results <- lapply(names(formuli), function(x){
         model <- tryCatch({
           message(paste0('running model... ',x))
+          clusVar <- ifelse(is.null(fixedEffects)&!is.null(cl),cl,fixedEffects)
           if (model.type=='poisfe'){
-            model <- fepois(formuli[[x]], data=reg.df, cluster=fixedEffects, glm.iter = 100)
+            model <- fepois(formuli[[x]], data=reg.df, cluster=clusVar, glm.iter = 100)
           } else if (model.type=='olsfe'){
-            model <- feols(formuli[[x]], data=reg.df, cluster=fixedEffects)
+            model <- feols(formuli[[x]], data=reg.df, cluster=clusVar)
           } else {
             stop('Invalid model detected.')
           }
@@ -424,11 +426,10 @@ ESAModel <- R6Class(
             }
             res <- cbind(coeftable(model), confint(model,level=0.9))
             res <- cbind(res, confint(model,level=0.95))
-          } else if (is.null(fixedEffects)&!is.null(vcovFn)){
+          } else if (is.null(fixedEffects)&is.null(cl)&!is.null(vcovFn)){
             # pass thru a variance co-variance function
-            vcovNew <- do.call(vcovFn,args=append(list(x=model),vcovArgs))
+            vcovNew <- do.call(vcovFn,args=append(list(x=model),vcovArgs),envir=environment())
             vcovRes <- lmtest::coeftest(model,vcov=vcovNew)
-            resbase <- broom::tidy(vcovRes)
             if (printSummary){
               print(vcovRes)
               print(model$collin.var)
