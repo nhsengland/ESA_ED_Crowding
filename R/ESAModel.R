@@ -401,7 +401,7 @@ ESAModel <- R6Class(
       model.results <- lapply(names(formuli), function(x){
         model <- tryCatch({
           message(paste0('running model... ',x))
-          clusVar <- ifelse(is.null(fixedEffects)&!is.null(cl),cl,fixedEffects)
+          clusVar <- fixedEffects
           if (model.type=='poisfe'){
             model <- fepois(formuli[[x]], data=reg.df, cluster=clusVar, glm.iter = 100)
           } else if (model.type=='olsfe'){
