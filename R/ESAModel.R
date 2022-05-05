@@ -11,6 +11,7 @@ ESAModel <- R6Class(
   public=list(
     initialize=function(ESAEDAggregated,
                         model.type=c('poisfe', 'olsfe'),
+                        args=NULL,
                         bedOccupancy=NULL,
                         slotVars=NULL,
                         nonSlotVars=NULL,
@@ -45,6 +46,7 @@ ESAModel <- R6Class(
       private$runModels(obj=ESAEDAggregated,
                         formuli=formuli,
                         model.type=model.type,
+                        args=args,
                         printSummary=printSummary,
                         withAME=withAME,
                         fixedEffects=fixedEffects,
@@ -386,7 +388,7 @@ ESAModel <- R6Class(
       }
       return(formuli)
     },
-    runModels=function(obj,formuli,model.type,printSummary,withAME,fixedEffects,vcovFn,vcovArgs,cl){
+    runModels=function(obj,formuli,model.type,args,printSummary,withAME,fixedEffects,vcovFn,vcovArgs,cl){
       # create empty results dataframe to store results of all the models...
       results.cols <- c('factor','estimate','std_err','t_value','p_value',
                         'lower_ci_90','upper_ci_90','lower_ci_95','upper_ci_95',
@@ -403,9 +405,11 @@ ESAModel <- R6Class(
           message(paste0('running model... ',x))
           clusVar <- fixedEffects
           if (model.type=='poisfe'){
-            model <- fepois(formuli[[x]], data=reg.df, cluster=clusVar, glm.iter = 100)
+            model <- do.call(fepois,args=append(list(fml=formuli[[x]],data=reg.df,cluster=clusVar),
+                                                args),envir=environment())
           } else if (model.type=='olsfe'){
-            model <- feols(formuli[[x]], data=reg.df, cluster=clusVar)
+            model <- do.call(feols,args=append(list(fml=formuli[[x]],data=reg.df,cluster=clusVar),
+                                               args),envir=environment())
           } else {
             stop('Invalid model detected.')
           }
