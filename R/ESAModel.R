@@ -62,8 +62,13 @@ ESAModel <- R6Class(
     results.slot.avg=function(sig=0.1,min.slot.sig=3){
       return(private$model.results.avg(sig=sig,min.slot.sig=min.slot.sig))
     },
-    getResults=function(sig=0.1, min.slot.sig=3, useSampleAvgs=TRUE,from='max',to='mean'){
-      resAll <- private$model.results.avg(sig=sig,min.slot.sig = min.slot.sig)
+    getResults=function(sig=0.1, min.slot.sig=3, useSampleAvgs=TRUE,from='max',to='mean',poisScaleCoeff=NULL){
+      if (private$modelType!='poisfe'&!is.null(poisScaleCoeff)){
+        warning('argument poisScaleCoeff is ignored due to invalid model type')
+        poisScaleCoeff <- NULL
+
+      }
+      resAll <- private$model.results.avg(sig=sig,min.slot.sig=min.slot.sig)
       if (is.null(resAll)){
         warning('There were no results obtained from this model.')
         return(NULL)
@@ -74,19 +79,47 @@ ESAModel <- R6Class(
         to <- 'mean'
       }
       # get sample averages
-      sampAvgs <- private$model.sample.averages(useSampleAvgs)
-      # merge the two
-      resAll <- merge.data.table(x=resAll,
-                                 y=sampAvgs,
-                                 by='varname',
-                                 all.x=TRUE)
+      sampleAvgs <- private$model.sample.averages(useSampleAvgs)
       slots <- unlist(lapply(private$esaEDObj$getSlots(), function(x) x$slotID))
-      # calculate from -> to from sample averages, then multiply by
-      # corresponding coefficient
-      outCols <- paste0(slots,paste0('_',from,'_to_',to))
-      resAll[, (outCols) := lapply(slots, function(x) (resAll[[paste0(x,'_',to)]]-resAll[[paste0(x,'_',from)]])*resAll[[x]])]
-      # calculate an average of output
-      resAll[, paste0('avg_',from,'_to_',to) := fcase(should_retain,rowMeans(.SD, na.rm=TRUE),default=NA), .SDcols=outCols]
+      # derive scaling factor for each
+      scaleFactCols <- paste0(slots,paste0('_',from,'_to_',to))
+      # it makes no sense to scale factors for this use, as they are compared to
+      # baseline, thus set all factors to 1
+      for (slt in slots){
+        sampleAvgs[,(paste0(slt,'_',from,'_to_',to)):=fcase(
+          is_factor==TRUE,1,
+          is_factor!=TRUE|is.na(is_factor),sampleAvgs[[paste0(slt,'_',to)]]-sampleAvgs[[paste0(slt,'_',from)]]
+        )]
+      }
+      # merge sample averages with main results
+      resAll <- merge.data.table(x=resAll,y=sampleAvgs,by='varname',all.x=TRUE)
+      # if poisson model and no scaling factors presented, or ols, multiply
+      # slot with scaling factor
+      outCols <- paste0(slots,paste0('_',from,'_to_',to,'_coeff_scaled'))
+      if ((private$modelType=='poisfe'&is.null(poisScaleCoeff))|private$modelType=='olsfe'){
+        resAll[,(outCols):=lapply(slots,function(x) resAll[[paste0(x,'_',from,'_to_',to)]]*resAll[[x]])]
+      } else if(private$modelType=='poisfe'&!is.null(poisScaleCoeff)){
+        if (!is.data.table(poisScaleCoeff)){
+          stop('scale table is not data.table. require varname and scalefactor col')
+        }
+        if (('varname'%in%colnames(poisScaleCoeff))&('scalefactor'%in%colnames(poisScaleCoeff))){
+          # merge scale table
+          resAll <- merge(x=resAll,y=poisScaleCoeff,by='varname',all.x=TRUE)
+          # fill na with 1
+          resAll[,scalefactor:=fifelse(is.na(scalefactor),1,scalefactor)]
+          # multiply sslot with scale factor
+          resAll[,(outCols):=lapply(slots,function(x) resAll[[x]]*resAll[['scalefactor']])]
+        } else {
+          stop('scale table requires varname and scalefactor col')
+        }
+      }
+      # calculate poisson multiplicative - exponentiate scaled coefficients (and slot var)
+      if (private$modelType=='poisfe'){
+        poisIrrCols <- (paste0(c(slots,outCols),'_pois_irr'))
+        resAll[,(poisIrrCols):=lapply(.SD,exp),.SDcols=c(slots,outCols)]
+        resAll[,(paste0(c(slots,outCols),'_pois_irr_perc')):=lapply(.SD,function(x) (x-1)*100),
+               .SDcols=(poisIrrCols)]
+      }
       return(resAll)
     },
     getCoefficientPlots=function(exclusions=NULL){
@@ -501,7 +534,7 @@ ESAModel <- R6Class(
       results <- rbindlist(model.results, use.names=TRUE)
       private$modelResults.all <- results
     },
-    model.results.avg=function(sig=0.1, min.slot.sig=3){
+    model.results.avg=function(sig=0.1, min.slot.sig=3,poisScaleCoeff=NULL){
       # minimum of slots that should be significant in must be less or equal to
       # the number of slots
       if (min.slot.sig > length(private$esaEDObj$getSlots())){
@@ -529,11 +562,6 @@ ESAModel <- R6Class(
         colsModelsUnavail <- c(paste0('estimate_',modelsUnavail),paste0('p_value_',modelsUnavail))
         wide[, (colsModelsUnavail) := NA]
       }
-      # for the poisson model, take the exponential of the coefficients (since
-      # the Poisson model utilises a log link)
-      if (grepl('pois',private$modelType)){
-        wide[, (paste0('estimate_',model.slots)) := lapply(.SD, exp),.SDcols=paste0('estimate_',model.slots)]
-      }
       pval.cols <- paste0('p_value_', unique(df[['model_grouper']]))
       pval.cols.out <- paste0(pval.cols,'_flag')
       # create flags whether p value is less than significance level define
@@ -560,6 +588,8 @@ ESAModel <- R6Class(
       warning=function(){
         return(NULL)
       })
+      # remove some columns
+      wide[,(pval.cols.out):=NULL]
       private$modelResultsWide.all <- wide
       return(wide)
     },
@@ -623,12 +653,14 @@ ESAModel <- R6Class(
           return(z)
         })
         factorSummary <- rbindlist(factorCounts, use.names=TRUE)
+        factorSummary[,is_factor:=TRUE]
         # bind factor summaries to statswide
-        statsWide <- rbindlist(list(statsWide,factorSummary), use.names=TRUE)
+        statsWide <- rbindlist(list(statsWide,factorSummary),use.names=TRUE,fill=TRUE)
         # set varname as key for later merges
         setkeyv(statsWide, 'varname')
         return(statsWide)
       })
+      for (i in 2:length(sample.avgs)) sample.avgs[[i]][,is_factor:=NULL]
       # merge each of the slot sample averages together
       all.sample.avgs <- Reduce(merge,sample.avgs)
       return(all.sample.avgs)
@@ -640,3 +672,4 @@ ESAModel <- R6Class(
     }
   )
 )
+
