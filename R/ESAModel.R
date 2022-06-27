@@ -20,7 +20,8 @@ ESAModel <- R6Class(
                         printSummary=FALSE,
                         withAME=FALSE,
                         vcovFn=NULL,
-                        vcovArgs=NULL){
+                        vcovArgs=NULL,
+                        panelID=NULL){
       if(!is(ESAEDAggregated, 'ESAEDAggregated')){
         stop('ESAEDAggregated must be ESAEDAggregated Object.')
       }
@@ -51,7 +52,8 @@ ESAModel <- R6Class(
                         withAME=withAME,
                         fixedEffects=fixedEffects,
                         vcovFn=vcovFn,
-                        vcovArgs=vcovArgs,cl=clusterSE)
+                        vcovArgs=vcovArgs,cl=clusterSE,
+                        dynPanelID=panelID)
     },
     runScenario=function(scenario){
       if(!is(scenario,'ESAModelScenario')){
@@ -421,7 +423,7 @@ ESAModel <- R6Class(
       }
       return(formuli)
     },
-    runModels=function(obj,formuli,model.type,args,printSummary,withAME,fixedEffects,vcovFn,vcovArgs,cl){
+    runModels=function(obj,formuli,model.type,args,printSummary,withAME,fixedEffects,vcovFn,vcovArgs,cl,dynPanelID){
       # create empty results dataframe to store results of all the models...
       results.cols <- c('factor','estimate','std_err','t_value','p_value',
                         'lower_ci_90','upper_ci_90','lower_ci_95','upper_ci_95',
@@ -443,6 +445,34 @@ ESAModel <- R6Class(
           } else if (model.type=='olsfe'){
             model <- do.call(feols,args=append(list(fml=formuli[[x]],data=reg.df,cluster=clusVar),
                                                args),envir=environment())
+          } else if (grepl('^dyn',model.type)){
+            # for both poisson and ols dynamic panel model
+            message('Results may be biased for large N and small to larger T (Nickell bias).')
+            message('If lagged dependent variable correlates with independents, estimates for independents biased.')
+            if (is.null(dynPanelID)){
+              stop("Must specify panel dimensions as char vector c('id','time')")
+            }
+            # only support a 1 lag on the dependent at the moment
+            depVar <- private$depVarFromFormula(formuli[[x]])
+            if (is.null(depVar)){
+              # check is not null, otherwise stop
+              stop('Could not identify a dependent variable')
+            }
+            listArgs <- append(
+              list(fml=update(copy(formuli[[x]]),paste0('~+l(',depVar,')+.')),
+                   data=reg.df,
+                   cluster=clusVar,
+                   panel.id=dynPanelID),
+              args
+            )
+            # run either poisson or ols fe (ldv)
+            if (model.type=='dynolsfe'){
+              model <- do.call(feols,args=listArgs,envir=environment())
+            } else if (model.type=='dynpoisfe'){
+              model <- do.call(fepois,args=listArgs,envir=enviroment())
+            } else {
+              stop('Invalid dynamic panel model detected')
+            }
           } else {
             stop('Invalid model detected.')
           }
@@ -660,7 +690,9 @@ ESAModel <- R6Class(
         setkeyv(statsWide, 'varname')
         return(statsWide)
       })
-      for (i in 2:length(sample.avgs)) sample.avgs[[i]][,is_factor:=NULL]
+      if (length(sample.avgs)>=2){
+        for (i in 2:length(sample.avgs)) sample.avgs[[i]][,is_factor:=NULL]
+      }
       # merge each of the slot sample averages together
       all.sample.avgs <- Reduce(merge,sample.avgs)
       return(all.sample.avgs)
@@ -669,6 +701,12 @@ ESAModel <- R6Class(
       suff <- paste0(ifelse(is.null(obj$getQueue()),obj$getAcuity()$name,
                     paste0(obj$getQueue()$name,'_',obj$getAcuity()$name)))
       return(suff)
+    },
+    depVarFromFormula=function(form){
+      if (attr(terms(as.formula(form)),which='response')){
+        return(all.vars(form)[1])
+      }
+      return(NULL)
     }
   )
 )
