@@ -64,11 +64,55 @@ ESAModel <- R6Class(
     results.slot.avg=function(sig=0.1,min.slot.sig=3){
       return(private$model.results.avg(sig=sig,min.slot.sig=min.slot.sig))
     },
-    getResults=function(sig=0.1, min.slot.sig=3, useSampleAvgs=TRUE,from='max',to='mean',poisScaleCoeff=NULL){
+    #' @description Get descriptive sample of regression dataset, calculating
+    #' the mean and the standard deviation
+    #' @param variables character vector - variables for which descriptives desired
+    #' @return data.table
+    getRegressionDescriptives=function(variables=NULL){
+      # loop through all the regression datasets
+      results <- lapply(names(private$modelRegression.datasets),function(nm){
+        dt <- copy(private$modelRegression.datasets[[nm]])
+        # extract numeric columns
+        colsEval <- colnames(dt)[unlist(lapply(dt,is.numeric))]
+        # if user has supplied specific variables to focus on, select these (use string match)
+        if (!is.null(variables)){
+          colsEval <- colsEval[grepl(paste(variables,collapse='|',sep=''),colsEval)]
+        }
+        # calculate averages
+        dtMeans <- dt[,lapply(.SD,mean,na.rm=TRUE),.SDcols=colsEval]
+        dtMeans[, metric:="mean"]
+        dtMeans <- dcast(melt(dtMeans,id.vars='metric'),variable~metric)
+        # calculate standard deviations
+        dtStdev <- dt[,lapply(.SD,sd,na.rm=TRUE),.SDcols=colsEval]
+        dtStdev[, metric:="stddev"]
+        dtStdev <- dcast(melt(dtStdev,id.vars="metric"),variable~metric)
+        # merge the two together
+        dtCombined <- merge(x=dtMeans,y=dtStdev,by="variable",all=TRUE)
+        dtCombined[,(nm):=paste0(round(mean,3), " (",round(stddev,3),")")]
+        setnames(dtCombined,old=c("mean","stddev"),new=paste0(nm,"_",c("mean","stddev")))
+        dtCombined[,variable:=gsub(paste0(nm,"_"),"",variable)]
+        dtCombined[,variable:=gsub("_"," ",variable)]
+        # set the key for merges of all
+        setkeyv(dtCombined,"variable")
+        return(dtCombined)
+      })
+      # merge the results
+      dtResult <- Reduce(merge,results)
+      return(dtResult)
+    },
+    #' @description Get a table of results with some form of derived magniture
+    #' @param sig decimal - significance level (e.g. 0.1 for 10%, 0.05 for 5% etc)
+    #' @param min.slot.sig integer - the minimum number of slots required for a result to be reported as 'consistent'
+    #' @param useSampleAvgs boolean - whether to use regression sample's statistcs, or that of whole sample
+    #' @param from string - whether to start at the min/mean/max for the magnitude
+    #' @param to string - whether to finish at min/mean/max for the magnitude
+    #' @param by integer - default=NULL, whether to use the standard deviation instead, and by how many
+    #' @param poisScaleCoeff numeric - a scaling factor applied to Poisson coefficients
+    #' @return data.table
+    getResults=function(sig=0.1, min.slot.sig=3, useSampleAvgs=TRUE,from='max',to='mean',useSD=NULL,poisScaleCoeff=NULL){
       if (private$modelType!='poisfe'&!is.null(poisScaleCoeff)){
         warning('argument poisScaleCoeff is ignored due to invalid model type')
         poisScaleCoeff <- NULL
-
       }
       resAll <- private$model.results.avg(sig=sig,min.slot.sig=min.slot.sig)
       if (is.null(resAll)){
@@ -80,26 +124,47 @@ ESAModel <- R6Class(
         from <- 'max'
         to <- 'mean'
       }
+      if (!is.null(useSD)){
+        # check that argument is numeric
+        if (!is.numeric(useSD)) stop('useSD argument must be numeric')
+        message('Defaulting to using SD rather than from mean to max for example')
+      }
       # get sample averages
       sampleAvgs <- private$model.sample.averages(useSampleAvgs)
       slots <- unlist(lapply(private$esaEDObj$getSlots(), function(x) x$slotID))
-      # derive scaling factor for each
-      scaleFactCols <- paste0(slots,paste0('_',from,'_to_',to))
-      # it makes no sense to scale factors for this use, as they are compared to
-      # baseline, thus set all factors to 1
+      # create a character which is the suffix to magnitude derived columns
+      magnitudeCalcSuff <- ifelse(test=is.null(useSD),
+                                  yes=paste0('_',from,'_to_',to),
+                                  no=paste0('_',useSD,'_stddev'))
+      # handle SD and non-SD differently:
+      # for non-SD, subtract 'from' metric from the 'to' metric
+      # for SD, multiply number of standard deviations with std dev
+      # loop through all of the slots, and derive the above...
       for (slt in slots){
-        sampleAvgs[,(paste0(slt,'_',from,'_to_',to)):=fcase(
-          is_factor==TRUE,1,
-          is_factor!=TRUE|is.na(is_factor),sampleAvgs[[paste0(slt,'_',to)]]-sampleAvgs[[paste0(slt,'_',from)]]
-        )]
+        # as it makes no sense to scale factors for this, set all factors to 1
+        if (!is.null(useSD)){
+          sampleAvgs[,(paste0(slt,magnitudeCalcSuff)):=fcase(
+            # set factors to 1
+            is_factor==TRUE,1,
+            # is not factor and in SD mode
+            (is_factor!=TRUE|is.na(is_factor)),(sampleAvgs[[paste0(slt,'_sd')]]*useSD)
+          )]
+        } else {
+          sampleAvgs[,(paste0(slt,magnitudeCalcSuff)):=fcase(
+            # set factors to 1
+            is_factor==TRUE,1,
+            # is not factor and in non-SD mode
+            (is_factor!=TRUE|is.na(is_factor)),(sampleAvgs[[paste0(slt,'_',to)]]-sampleAvgs[[paste0(slt,'_',from)]])
+          )]
+        }
       }
       # merge sample averages with main results
       resAll <- merge.data.table(x=resAll,y=sampleAvgs,by='varname',all.x=TRUE)
       # if poisson model and no scaling factors presented, or ols, multiply
       # slot with scaling factor
-      outCols <- paste0(slots,paste0('_',from,'_to_',to,'_coeff_scaled'))
+      outCols <- paste0(slots,paste0(magnitudeCalcSuff,'_coeff_scaled'))
       if ((private$modelType=='poisfe'&is.null(poisScaleCoeff))|private$modelType=='olsfe'){
-        resAll[,(outCols):=lapply(slots,function(x) resAll[[paste0(x,'_',from,'_to_',to)]]*resAll[[x]])]
+        resAll[,(outCols):=lapply(slots,function(x) resAll[[paste0(x,magnitudeCalcSuff)]]*resAll[[x]])]
       } else if(private$modelType=='poisfe'&!is.null(poisScaleCoeff)){
         if (!is.data.table(poisScaleCoeff)){
           stop('scale table is not data.table. require varname and scalefactor col')
@@ -124,6 +189,9 @@ ESAModel <- R6Class(
       }
       return(resAll)
     },
+    #' @description Create coefficient plots
+    #' @param exclusions character vector - variables to exclude from plotting
+    #' @return list of ggplot objects
     getCoefficientPlots=function(exclusions=NULL){
       # create coefficient plots for all of the models
       # get models
@@ -153,6 +221,14 @@ ESAModel <- R6Class(
       names(plots) <- models
       return(plots)
     },
+    #' @description Create various bed occupancy plots for the bed occupancy
+    #' variables for the models
+    #' @param sig decimal - significance level (0.1=10%, 0.05=5%)
+    #' @param min.slot.sig integer - minimum number of slots where signifance occurs for the result to be 'consistent'
+    #' @param useSampleAvgs boolean - whether to use regression sample, or overall sample for deriving descriptive statistics
+    #' @param groupSize integer - how many percentage increments to group together (e.g. groupSize=5 would have 96,97,98,99,100)
+    #' @param reverse boolean - whether to reverse the ordering of the chart
+    #' @return list of data.table and ggplot objects.
     getBedOccupancyPlots=function(sig=0.1, min.slot.sig=3, useSampleAvgs=TRUE, groupSize=5, reverse=FALSE){
       # get sample averages
       sampAvgs <- private$model.sample.averages(useSampleAvgs)
@@ -526,7 +602,7 @@ ESAModel <- R6Class(
         model.df <- data.table::copy(obj$data)
         model.vars <- all.vars(formuli[[x]])
         cols.retain <- unique(c(obj$getProviderSite(),'final_date',model.vars))
-        model.df <- model.df[,..cols.retain]
+        #odel.df <- model.df[,..cols.retain]
         model.df[,is_complete_case:=FALSE]
         model.df[complete.cases(model.df[,..model.vars]),is_complete_case:=TRUE]
         return(model.df)
@@ -638,7 +714,8 @@ ESAModel <- R6Class(
         stats <- df[, as.list(unlist(lapply(.SD, function(y){
           list(mean=mean(y,na.rm=TRUE),
                min=min(y, na.rm=TRUE),
-               max=max(y, na.rm=TRUE))
+               max=max(y, na.rm=TRUE),
+               sd=sd(y,na.rm=TRUE))
         }))), by=site.code, .SDcols=cols.numeric]
         # where no levels to average/max; min/max may return Inf/-Inf, remove and
         # replace with NA
@@ -660,11 +737,12 @@ ESAModel <- R6Class(
             grepl('.mean', varname, fixed=TRUE), 'mean',
             grepl('.max', varname, fixed=TRUE), 'max',
             grepl('.min', varname, fixed=TRUE), 'min',
+            grepl('.sd',varname,fixed=TRUE), 'sd',
             default = 'unknown'
           )
         )]
         # remove .mean, .max, .min from varname
-        stats[, varname := gsub('\\.mean|\\.max|\\.min', '', varname)]
+        stats[, varname := gsub('\\.mean|\\.max|\\.min|\\.sd', '', varname)]
         slotsName <- gsub(pattern=private$getModelSuff(private$esaEDObj),'',x)
         stats[, metric := paste0(slotsName,metric)]
         # reshape wide so that min, max and mean are in seperate columns
