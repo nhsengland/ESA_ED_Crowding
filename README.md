@@ -457,6 +457,17 @@ Key arguments
   - Specialty counts: count of inpatients per day within each specialty
 - For this, we can use the `ESAAdmittedAggregated` class to derive these - this class provides some data cleaning steps, as well as the derivations for the aforementioned variables. Further details of these can be requested.
 
+- Some mandatory data cleansing steps are applied to this data:
+  1. Drop episodes where the episode start or episode end dates are missing
+  2. Drop episodes where the episode end date is not within the bounds of the time period of analysis
+  3. Drop episode where the episode start date is less than the minimum date of the time period of analysis
+  4. Drop episode where the start date exceeds the episode end date
+  5. Drop episode where the spell identifier is null or blank
+  6. Drop episode where the patient identifier is null or blank
+  7. Drop spells where there is a duplicated episode number within the episodes contained per spell
+  8. Drop spells where there is an overlap in terms of episode end and the next episode start date
+  9. Drop spells where there is a pseudo patient identifier mismatch between episodes within a spell
+
 ```r
 apceObj <- ESAAdmittedAggregated$new(data=apce,
    date.min=as.Date('2021-01-01')-21,
@@ -488,3 +499,7 @@ Due to the concern of perfect multicollinearity, the user must ensure that when 
 ### Subgroups
 
 There are some additional considerations when running the models on subgroups, for example across the seven regions. The user may have to reduce the degrees of freedom used, overall, and for some variables. For example, when running the model, the South West may only contain around 16 sites. However, the full bed occupancy variable has 21 levels. Therefore, the user may want to apply the following groupings for the bed occupancy variable: less than 80%, between 80% and 89%, and between 90% and 100%. Furthermore, the user may want to replace the various ethnicity variables with a single variable – BAME ethnicity.  
+
+### Policy environment
+
+There may be additional considerations the user wishes to take with regard to recent policies aimed at reducing crowding in the ED. We do not handle any of these within our initial implementation (as some of these came after this project concluded). For example, one may wish to exclude ED attendances where the patient was booked in for a certain time (thus may not actually be present within the ED).
