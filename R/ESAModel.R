@@ -97,7 +97,7 @@ ESAModel <- R6Class(
         return(dtCombined)
       })
       # merge the results
-      dtResult <- Reduce(merge,results)
+      dtResult <- Reduce(function(...) merge(...,all=TRUE),results)
       return(dtResult)
     },
     #' @description Get a table of results with some form of derived magniture
@@ -108,8 +108,9 @@ ESAModel <- R6Class(
     #' @param to string - whether to finish at min/mean/max for the magnitude
     #' @param by integer - default=NULL, whether to use the standard deviation instead, and by how many
     #' @param poisScaleCoeff numeric - a scaling factor applied to Poisson coefficients
+    #' @param hideCalc boolean - whether or not to hide calculation columns
     #' @return data.table
-    getResults=function(sig=0.1, min.slot.sig=3, useSampleAvgs=TRUE,from='max',to='mean',useSD=NULL,poisScaleCoeff=NULL){
+    getResults=function(sig=0.1, min.slot.sig=3, useSampleAvgs=TRUE,from='max',to='mean',useSD=NULL,poisScaleCoeff=NULL,hideCalc=TRUE){
       if (private$modelType!='poisfe'&!is.null(poisScaleCoeff)){
         warning('argument poisScaleCoeff is ignored due to invalid model type')
         poisScaleCoeff <- NULL
@@ -186,6 +187,11 @@ ESAModel <- R6Class(
         resAll[,(poisIrrCols):=lapply(.SD,exp),.SDcols=c(slots,outCols)]
         resAll[,(paste0(c(slots,outCols),'_pois_irr_perc')):=lapply(.SD,function(x) (x-1)*100),
                .SDcols=(poisIrrCols)]
+      }
+      # check if need to hide certain columns from the results table
+      if (hideCalc){
+        resAll[,c("count_na","has_pos","has_neg","should_retain","slot_avg",
+                  "slot_min","slot_max","is_factor"):=NULL]
       }
       return(resAll)
     },
