@@ -145,16 +145,16 @@ ESAModel <- R6Class(
         if (!is.null(useSD)){
           sampleAvgs[,(paste0(slt,magnitudeCalcSuff)):=fcase(
             # set factors to 1
-            is_factor==TRUE,1,
+            is_factor==TRUE,as.numeric(1),
             # is not factor and in SD mode
-            (is_factor!=TRUE|is.na(is_factor)),(sampleAvgs[[paste0(slt,'_sd')]]*useSD)
+            (is_factor!=TRUE|is.na(is_factor)),as.numeric((sampleAvgs[[paste0(slt,'_sd')]]*useSD))
           )]
         } else {
           sampleAvgs[,(paste0(slt,magnitudeCalcSuff)):=fcase(
             # set factors to 1
-            is_factor==TRUE,1,
+            is_factor==TRUE,as.numeric(1),
             # is not factor and in non-SD mode
-            (is_factor!=TRUE|is.na(is_factor)),(sampleAvgs[[paste0(slt,'_',to)]]-sampleAvgs[[paste0(slt,'_',from)]])
+            (is_factor!=TRUE|is.na(is_factor)),as.numeric((sampleAvgs[[paste0(slt,'_',to)]]-sampleAvgs[[paste0(slt,'_',from)]]))
           )]
         }
       }
