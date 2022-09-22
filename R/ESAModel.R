@@ -602,7 +602,7 @@ ESAModel <- R6Class(
         model.df <- data.table::copy(obj$data)
         model.vars <- all.vars(formuli[[x]])
         cols.retain <- unique(c(obj$getProviderSite(),'final_date',model.vars))
-        #odel.df <- model.df[,..cols.retain]
+        model.df <- model.df[,..cols.retain]
         model.df[,is_complete_case:=FALSE]
         model.df[complete.cases(model.df[,..model.vars]),is_complete_case:=TRUE]
         return(model.df)
