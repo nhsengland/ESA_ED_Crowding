@@ -1,5 +1,9 @@
 # NHS Emergency Department Crowding Model
 
+![status: active](https://github.com/GIScience/badges/raw/master/status/active.svg)
+
+__Note:__ _No data is shared in this repository._
+
 ## Introduction
 
 The Economics and Strategic Analysis Team, working under the Chief Data and Analytics Officer (CDAO) at NHS England have developed a model to investigate Emergency Department (ED) crowding. This builds on previous analysis conducted within the team. This model aims to take a whole system approach, looking at drivers of crowding pre-hospital, within A&E, rest of hospital and wider healthcare capacity.
@@ -503,3 +507,11 @@ There are some additional considerations when running the models on subgroups, f
 ### Policy environment
 
 There may be additional considerations the user wishes to take with regard to recent policies aimed at reducing crowding in the ED. We do not handle any of these within our initial implementation (as some of these came after this project concluded). For example, one may wish to exclude ED attendances where the patient was booked in for a certain time (thus may not actually be present within the ED).
+
+## License
+
+Unless stated otherwise, the codebase is released under [the MIT License](https://github.com/nhsengland/ESA_ED_Crowding/blob/main/LICENSE). This covers both the codebase and any sample code in the documentation.
+
+_See [LICENSE](https://github.com/nhsengland/ESA_ED_Crowding/blob/main/LICENSE) for more information._
+
+The documentation is [© Crown copyright](http://www.nationalarchives.gov.uk/information-management/re-using-public-sector-information/uk-government-licensing-framework/crown-copyright/) and available under the terms of the [Open Government 3.0](http://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/) license.
