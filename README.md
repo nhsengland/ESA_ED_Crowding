@@ -1,16 +1,74 @@
-# NHS Emergency Department Crowding Model
+<a name="readme-top"></a>
 
+<!-- project shields -->
 ![status: active](https://github.com/GIScience/badges/raw/master/status/active.svg)
+[![Issues][issues-shield]][license-url]
+[![Forks][forks-shield]][forks-url]
+[![Stars][stars-shield]][stars-url]
+[![MIT License][license-shield]][license-url]
+
+<!-- project header -->
+<br/>
+<div align="center">
+	<h3 align="center">NHS Emergency Department Crowding Model</h3>
+	<p align="center">
+		The Economics and Strategic Analysis Team, working under the Chief Data and Analytics Officer (CDAO) at NHS England have developed a model to investigate Emergency Department (ED) crowding. This builds on previous analysis conducted within the team. This model aims to take a whole system approach, looking at drivers of crowding pre-hospital, within A&E, rest of hospital and wider healthcare capacity.
+		<br/>
+		<a href="https://github.com/nhsengland/ESA_ED_Crowding/issues">Report Bug</a>
+		<a href="https://github.com/nhsengland/ESA_ED_Crowding/issues">Request Feature</a>
+	</p>
+</div>
+
+<!-- table of contents -->
+<details>
+	<summary>Table of Contents</summary>
+	<ol>
+		<li><a href="#aims">Aims</a></li>
+		<li><a href="#motivation-contribution">Motivation & Contribution</a></li>
+		<li><a href="#what-is-ed-crowding">What is ED crowding, and why is it important?</a></li>
+		<li><a href="#how-we-measure-crowding">How do we measure ED crowding?</a></li>
+		<li><a href="#our-model">Our model</a></li>
+		<li><a href="#packages">Packages</a></li>
+		<li><a href="#usage">Usage</a></li>
+		<li><a href="#data-sources">Data Sources</a></li>
+		<li><a href="#data-flows">Data flows</a></li>
+		<li><a href="#installation">Installing the package</a></li>
+		<li>
+			<a href="#getting-started">Getting Started</a>
+			<ul>
+				<li><a href="#class-overview">Class overview</a></li>
+				<li><a href="#slots">Slots</a></li>
+				<li><a href="#queues">Queues</a></li>
+				<li><a href="#ed-attendance-vars">ED attendance variables</a></li>
+				<li><a href="#acuity">Acuity</a></li>
+				<li><a href="#ed-patient-level">ED patient level</a></li>
+				<li><a href="#ed-aggregated">ED aggregated</a></li>
+				<li><a href="#esa-ed-crowding-model">ESA ED Crowding Model</a></li>
+				<li><a href="#inpatients-data">Inpatients data</a></li>
+			</ul>
+		</li>
+		<li><a href="#note-on-add-vars">A note on additional variables</a></li>
+		<li>
+			<a href="#additional-considerations">Additional Considerations</a>
+			<ul>
+				<li><a href="#share-variables">Share Variables</a></li>
+				<li><a href="#subgroups">Subgroups</a></li>
+				<li><a href="#policy-environment">Policy environment</a></li>
+			</ul>
+		</li>
+		<li><a href="#contributing">Contributing</a></li>
+		<li><a href="#license">License</a></li>
+		<li><a href="#contact">Contact</a></li>
+	</ol>
+</details>
 
 __Note:__ _No data is shared in this repository._
-
-## Introduction
-
-The Economics and Strategic Analysis Team, working under the Chief Data and Analytics Officer (CDAO) at NHS England have developed a model to investigate Emergency Department (ED) crowding. This builds on previous analysis conducted within the team. This model aims to take a whole system approach, looking at drivers of crowding pre-hospital, within A&E, rest of hospital and wider healthcare capacity.
 
 ## Aims
 
 The purpose of the code is for other users within the NHS system, to take this work forward. We therefore have developed using the R programming language. The main interface for this analysis is designed to be as simple as possible, and has been developed in a database-agnostic manner. The package is built in a manner to allow user customizability, for example, one may wish to explore the effect of factors on ED crowding over the whole day, rather than for specific slots.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Motivation & Contribution
 
@@ -58,6 +116,8 @@ Crowding can occur for three types of ED patients
 - **Minors** - least seriously injured or ill patients, with injuries such as ankle or wrist injuries
 - **Resus** - crowding expected to be less of a problem in **resus** as these are the most seriously injured or ill patients
 
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 ## How do we measure ED crowding?
 
 After engaging with stakeholders, we decided to model ED crowding using three metrics. The first two metrics are seperately calculated for each type of patient (**majors**/**minors**/**resus**) and for each time slot in the day. The third metric is only estimated for **majors** and **resus**.
@@ -67,6 +127,8 @@ After engaging with stakeholders, we decided to model ED crowding using three me
 **6 hours + stays**: ***Number of patients staying longer than 6 hours at ED***. This is a subset of the overall crowding metric. It counts the number of patients who would have been staying for 6+ hours by the end of the slot, or their discharge time, whichever is earlier.
 
 **Cubicle crowding**: ***Number of majors and resus patients staying in the ED per cubicle***. We sum the overall crowding metric for majors and resus patients (for a given site/day/time slot) and divide by the number of majors + resus cubicles for that site.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Our model
 
@@ -86,6 +148,8 @@ We create separate models to look at three crowding metrics for three patient ty
 
 **There may be unobserved variation between sites, and while we cannot directly measure the effect of those factors on crowding, as long as they do not vary much over time, our modelling approach minimises the danger that our results are affected by their non-inclusion.**
 
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 ## Packages
 
 | Package Name  | Purpose                                   |
@@ -97,9 +161,13 @@ We create separate models to look at three crowding metrics for three patient ty
 | ggplot2       | used for some plots                       |
 | gt (suggested)| create HTML tables from regression tables |
 
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 ## Usage
 
 We rely on hospital activity data from the Secondary Uses Service repository. However, the user is free to rely on their own data-sources, provided the relevant data points are present. We implement R6 classes to clean, prepare, derive and aggregate data for both (admitted) inpatients, and emergency department attendances. Whilst some level of data cleaning is present, when using data other than SUS, it is recommended that data be adequately prepared beforehand. Furthermore, it is easy to supplement the aforementioned datasets with other relevant data, we do so utilising NHS England Situation Reports (SitReps).
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Data Sources
 
@@ -113,6 +181,8 @@ We rely on hospital activity data from the Secondary Uses Service repository. Ho
 | Discharge Sitrep | Discharge Daily Sitrep, COVID-19 PSDM| Derive the discharge rate (the proportion of those who were fit to be discharged, who were discharged) | Indicator of wider-system pressures e.g. social care | Period_DateTime_Start, Org_Code, Metric_ID, Metric_Value |
 | Bed Occupancy | Strategic Insights Platform (SIP) | Derive Adult Critical Care (ACC) and General & Acute (G&A) bed occupancy <br/> ($\frac{\text{occupied beds}}{\text{open beds}}$) | These figures can be alternatively obtained via the Acute SitRep in the COVID-19 PSDM. We bucket each type of bed occupancy into 0-80%, then one percentage point increments until 100% bed occupancy. Modeling on regions (or smaller) may require larger bucket sizes (e.g. five percentage point buckets) due to the small amount of trusts relative to the number of levels. Note again that in our modeling, we use the previous day's bed occupancy levels rather than that of the present day. This is to mitigate any potential reverse-causality. | G&ATotalBedsOpen, G&ATotalBedsOccupied, ACCBedsOpen, ACCBedsOccupied, OrgCode, Period, Site_Code |
 | Cubicles | Internally via Get It Right First Time (GIRFT) | Number of (majors and resus) cubicles | Note this datasource is static (e.g. no variation over time) | |
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Data flows
 
@@ -148,6 +218,8 @@ flowchart TD;
 	final==>id["Modelling"]
 	user("User Supplied Data")--merge--->final
 ```
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Installing the package
 
@@ -453,7 +525,7 @@ Key arguments
   - `model$getRegressionDatasets()`: The actual datasets utilised in the regression models.
   - `model$getRegressionTable()`: data.frame of all regression outputs including some statistics i.e. size of fixed effect, sample size, AIC, BIC.
 
-## Inpatients data
+### Inpatients data
 
 - We derive several variables from the inpatients dataset:
   - Transfers: count of patients who move between specialty, specialty and site, site (burden on receiving site), site (burden on departure site).
@@ -490,9 +562,13 @@ apceObj <- ESAAdmittedAggregated$new(data=apce,
 
 - These variables are derived through calling the following methods: `apce$transfers()`, `apce$longStayPatients()`, and `apce$specialtes()`. All of these methods return a data.table at daily-site level, which can be merged as in the **Additional data** stage above.
 
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 ## A note on additional variables
 
 Whilst the user is free to add any additional variables they wish, these should have a basis in theory (or a hypothesis to test). Furthermore, the user should ensure that any variables they do not violate any of the assumptions of the linear regression model.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Additional Considerations
 
@@ -508,6 +584,26 @@ There are some additional considerations when running the models on subgroups, f
 
 There may be additional considerations the user wishes to take with regard to recent policies aimed at reducing crowding in the ED. We do not handle any of these within our initial implementation (as some of these came after this project concluded). For example, one may wish to exclude ED attendances where the patient was booked in for a certain time (thus may not actually be present within the ED).
 
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+<!-- Contributing -->
+
+## Contributing
+
+Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+
+If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
+Don't forget to give the project a star! Thanks again!
+
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+<!-- LICENSE -->
 ## License
 
 Unless stated otherwise, the codebase is released under [the MIT License](https://github.com/nhsengland/ESA_ED_Crowding/blob/main/LICENSE). This covers both the codebase and any sample code in the documentation.
@@ -515,3 +611,15 @@ Unless stated otherwise, the codebase is released under [the MIT License](https:
 _See [LICENSE](https://github.com/nhsengland/ESA_ED_Crowding/blob/main/LICENSE) for more information._
 
 The documentation is [© Crown copyright](http://www.nationalarchives.gov.uk/information-management/re-using-public-sector-information/uk-government-licensing-framework/crown-copyright/) and available under the terms of the [Open Government 3.0](http://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/) license.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+<!-- Markdown Links & Images -->
+[issues-shield]: https://img.shields.io/github/issues/nhsengland/ESA_ED_Crowding
+[issues-url]: https://github.com/nhsengland/ESA_ED_Crowding/issues
+[forks-shield]: https://img.shields.io/github/forks/nhsengland/ESA_ED_Crowding
+[forks-url]: https://github.com/nhsengland/ESA_ED_Crowding/network/members
+[stars-shield]: https://img.shields.io/github/stars/nhsengland/ESA_ED_Crowding
+[stars-url]: https://github.com/nhsengland/ESA_ED_Crowding/stargazers
+[license-shield]: https://img.shields.io/github/license/nhsengland/ESA_ED_Crowding
+[license-url]: https://github.com/nhsengland/ESA_ED_Crowding/main/blob/LICENSE
