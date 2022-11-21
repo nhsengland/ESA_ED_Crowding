@@ -9,7 +9,9 @@
 #' }
 #' @export
 getDataFromODBC <- function(odbcName, odbcQuery){
-
+  if (!requireNamespace("odbc",quietly=TRUE) | !requireNamespace("DBI",quietly=TRUE)){
+    stop("Function requries both odbc and DBI package.")
+  }
   response <- tryCatch(
     {
       # establish odbc connection
@@ -116,3 +118,31 @@ vector.endsWith <- function(x,y){
   # unlist the end product
   return(unlist(find))
 }
+
+#' enum function
+#' @title Create an enum ala C
+#' @description
+#' credit to https://stackoverflow.com/questions/33838392/enum-like-arguments-in-r
+#' @param ... args
+#' @return environment
+#' @examples
+#' ENUM(Test1,Test2,Test3)
+#' @usage
+#' test <- ENUM(Test1,Test2,Test3)
+#' test$Test1
+ENUM <- function(...){
+  # parse args
+  values <- sapply(match.call(expand.dots = TRUE)[-1L],deparse)
+  # check no duplicates in args
+  stopifnot(identical(unique(values),values))
+  res <- setNames(seq_along(values),values)
+  # set as environment
+  res <- as.environment(as.list(res))
+  # lock the environment to prevent further modification
+  lockEnvironment(res,bindings=TRUE)
+  return(res)
+}
+
+#' @title Enum on whether site, date, or both are provided for joining data
+#' @export
+ESAEDMergeTypes <- ENUM(siteOnly,dateOnly,siteAndDate, provOnly, provAndDate)

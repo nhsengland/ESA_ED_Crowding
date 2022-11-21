@@ -17,7 +17,8 @@ ESAEDAggregated <- R6Class(
                         cubicles=NULL,
                         cubicles.site=NULL,
                         cubicles.date=NULL,
-                        cubicles.col=NULL){
+                        cubicles.col=NULL,
+                        otherFlags=NULL){
       # data must be data.table
       if (!(is(esaPatientLevel,'ESAEDPatientLevel') | is(esaPatientLevel,'data.table'))){
         stop('esaPatientLevel must be an ESAEDPatientLevel object.')
@@ -63,7 +64,8 @@ ESAEDAggregated <- R6Class(
                                            cubicles=cubicles,
                                            cubicles.site=cubicles.site,
                                            cubicles.date=cubicles.date,
-                                           cubicles.col=cubicles.col)
+                                           cubicles.col=cubicles.col,
+                                           otherFlags=otherFlags)
       } else if (is(esaPatientLevel,'data.table')) {
         self$data <- esaPatientLevel
       } else {
@@ -80,6 +82,29 @@ ESAEDAggregated <- R6Class(
                                     by.x=c(private$providerSite, 'final_date'),
                                     by.y=c(esaAdmittedAggregated$getProviderSite(),'final_date'),
                                     all.x=TRUE)
+    },
+    #' @description Merge a list of ESAExternalData objects
+    #' @param objects a list of ESAExternalData objects
+    mergeExternalDataObjects=function(objects){
+      # check objects is a list, and that it contains only ESAExternalData objects
+      if (!is(objects,"list")) stop("objects must be a list.")
+      if (!Reduce("&",lapply(objects, function(x) is(x,"ESAExternalData")))) stop("list must only contain ESAExternalData objects.")
+      # internal function which returns the keys for each element in the enum
+      keysForMergeType <- function(type){
+        if (type$siteOnly) return(c(self$getProviderSite()))
+        else if (type$dateOnly) return(c(self$getDate()))
+        else if (type$siteAndDate) return(c(self$getProviderSite(), self$getDate()))
+        else if (type$provOnly) return(c(self$getProvider()))
+        else if (type$provAndDate) return(c(self$getProvider(), self$getDate()))
+      }
+      # loop through all the elements in objects and merge appropriately
+      for (obj in objects){
+        # set the keys as per the objects' merge type
+        keysToSet <- keysForMergeType(obj$getMergeType())
+        data.table::setkeyv(self$data, keysToSet)
+        # merge data in obj to data attribute
+        self$data <- merge(x=self$data, y=obj$data, all=TRUE)
+      }
     },
     getAvailableVars=function(){
       # get list of available variables (columns)
@@ -137,7 +162,8 @@ ESAEDAggregated <- R6Class(
                            cubicles=NULL,
                            cubicles.site=NULL,
                            cubicles.date=NULL,
-                           cubicles.col=NULL){
+                           cubicles.col=NULL,
+                           otherFlags=NULL){
 
       df <- data.table::copy(private$esaPatientLevel$data)
 
@@ -148,18 +174,21 @@ ESAEDAggregated <- R6Class(
         # slot column used as multiplier
         slotMultiplier <- paste0(slot$slotID,'_', ifelse(is.null(private$queue),private$acuity$name,paste0(private$queue$name,'_',private$acuity$name)))
         # flag columns
-        flagCols <- unlist(lapply(private$esaPatientLevel$getFlags(), function(x) x$name))
+        flagCols <- c(unlist(lapply(private$esaPatientLevel$getFlags(), function(x) x$name)), otherFlags)
         # output columns
         flagOutputCols <- paste0(slotMultiplier,'_', flagCols)
         # multiply flags by the slot multiplier
         df[, (flagOutputCols) := lapply(.SD, function(x) x*df[[slotMultiplier]]), .SDcols=flagCols]
         # additionally need to aggregate the columns of the other acuities
         otherAccs <- private$acuity$other.acuities()
-        otherAccsPrefix <- paste0(slot$slotID, ifelse(is.null(private$queue),'', paste0('_', private$queue$name)), '_')
-        otherAccsCols <- paste0(otherAccsPrefix, otherAccs)
+        if (!is.null(otherAccs)){
+          otherAccsPrefix <- paste0(slot$slotID, ifelse(is.null(private$queue),'', paste0('_', private$queue$name)), '_')
+          otherAccsCols <- paste0(otherAccsPrefix, otherAccs)
+          otherOutputCols[[slotMultiplier]] <- otherAccsCols
+        }
         # add output columns to the all output cols (these will be aggregated)
         allOutputCols[[slotMultiplier]] <- flagOutputCols
-        otherOutputCols[[slotMultiplier]] <- otherAccsCols
+
       }
       # all columns to aggregate
       allColsAgg <- c(unlist(allOutputCols), unlist(otherOutputCols), names(allOutputCols))
