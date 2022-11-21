@@ -16,30 +16,39 @@ ESAAcuity <- R6Class(
   classname='ESAAcuity',
   inherit=ESADataFlag,
   public=list(
-    initialize=function(name,columns,search){
-      # only allow the name to be minors,majors,resus or cubicles
-      if(!name %in% c('minors', 'majors', 'resus', 'cubicles')){
-        stop('Acuity must be either majors, minors, resus or cubicles')
+    initialize=function(name,columns,search,imposeNames=TRUE,isAcuityModel=TRUE){
+      if (imposeNames){
+        # only allow the name to be minors,majors,resus or cubicles
+        if(!name %in% c('minors', 'majors', 'resus', 'cubicles')){
+          stop('Acuity must be either majors, minors, resus or cubicles')
+        }
       }
       self$name <- name
       self$columns <- columns
       self$search <- search
+      private$isAcuityModel <- isAcuityModel
     },
     other.acuities=function(){
-      # function to get other related acuities - for cubicles it is minors (as
-      # cubicles is defined as resus + majors). For majors/minors/resus it is two
-      # acuities which are not this current acuity. Predominately this is used in
-      # the regression model, as the other acuities are control variables.
-      if(self$name=='cubicles'){
-        return(c('minors'))
-      } else {
-        acuities <- c('minors', 'majors', 'resus')
-        return(acuities[acuities != self$name])
+      if (private$isAcuityModel){
+        # function to get other related acuities - for cubicles it is minors (as
+        # cubicles is defined as resus + majors). For majors/minors/resus it is two
+        # acuities which are not this current acuity. Predominately this is used in
+        # the regression model, as the other acuities are control variables.
+        if(self$name=='cubicles'){
+          return(c('minors'))
+        } else {
+          acuities <- c('minors', 'majors', 'resus')
+          return(acuities[acuities != self$name])
+        }
       }
+      return(NULL)
     },
     print=function(){
       message(paste0('ESAAcuity: ', self$name, ', col: ', self$columns, ', search:', paste(self$search, collapse=',')))
     }
+  ),
+  private=list(
+    isAcuityModel = TRUE
   )
 )
 

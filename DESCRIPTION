@@ -5,24 +5,23 @@ Version: 0.1.0
 Author: Economics and Strategic Analysis Team <econstrat.analysis@nhs.net>
 Maintainer: Economics and Strategic Analysis Team <econstrat.analysis@nhs.net>
 Description: The Economics and Strategic Analysis Team, working under the Chief
-    Data and Analytics Officer at NHS England and NHS Improvement have developed 
+    Data and Analytics Officer at NHS England have developed 
     a model to investigate Emergency Department crowding, building on previous 
     work conducted within the team. This package provides a user-friendly, 
-    database agnostic way for other teams at NHSE&I and across the NHS system 
+    database agnostic way for other teams at NHSE and across the NHS system 
     to utilise, and build upon, this model.
 License: MIT
 Encoding: UTF-8
 LazyData: true
 Imports:
   data.table,
-  odbc,
-  DBI,
   fixest,
   Rcpp (>= 1.0.7),
   R6,
   ggplot2,
-  marginaleffects,
   broom
 RoxygenNote: 7.1.1
 Suggests: 
-
+  marginaleffects,
+  odbc,
+  DBI

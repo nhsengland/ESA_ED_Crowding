@@ -21,7 +21,8 @@ ESAModel <- R6Class(
                         withAME=FALSE,
                         vcovFn=NULL,
                         vcovArgs=NULL,
-                        panelID=NULL){
+                        panelID=NULL,
+                        dependent=NULL){
       if(!is(ESAEDAggregated, 'ESAEDAggregated')){
         stop('ESAEDAggregated must be ESAEDAggregated Object.')
       }
@@ -37,6 +38,7 @@ ESAModel <- R6Class(
       private$bedOccupancyVars <- bedOccupancy
       private$modelType <- model.type
       private$fixedEffects <- fixedEffects
+      private$dependent <- dependent
       # get formuli
       formuli <- private$getFormulas(obj=ESAEDAggregated,
                                      bedOccupancy=bedOccupancy,
@@ -55,15 +57,17 @@ ESAModel <- R6Class(
                         vcovArgs=vcovArgs,cl=clusterSE,
                         dynPanelID=panelID)
     },
+    #' @description This method has not been implemented.
     runScenario=function(scenario){
       if(!is(scenario,'ESAModelScenario')){
         stop('Scenario must be ESAModelScenario object.')
       }
       stop('Not supported')
     },
-    results.slot.avg=function(sig=0.1,min.slot.sig=3){
-      return(private$model.results.avg(sig=sig,min.slot.sig=min.slot.sig))
-    },
+    #' @description Returns slot
+    # results.slot.avg=function(sig=0.1,min.slot.sig=3){
+    #   return(private$model.results.avg(sig=sig,min.slot.sig=min.slot.sig))
+    # },
     #' @description Get descriptive sample of regression dataset, calculating
     #' the mean and the standard deviation
     #' @param variables character vector - variables for which descriptives desired
@@ -97,7 +101,7 @@ ESAModel <- R6Class(
         return(dtCombined)
       })
       # merge the results
-      dtResult <- Reduce(merge,results)
+      dtResult <- Reduce(function(...) merge(...,all=TRUE),results)
       return(dtResult)
     },
     #' @description Get a table of results with some form of derived magniture
@@ -108,8 +112,9 @@ ESAModel <- R6Class(
     #' @param to string - whether to finish at min/mean/max for the magnitude
     #' @param by integer - default=NULL, whether to use the standard deviation instead, and by how many
     #' @param poisScaleCoeff numeric - a scaling factor applied to Poisson coefficients
+    #' @param hideCalc boolean - whether or not to hide calculation columns
     #' @return data.table
-    getResults=function(sig=0.1, min.slot.sig=3, useSampleAvgs=TRUE,from='max',to='mean',useSD=NULL,poisScaleCoeff=NULL){
+    getResults=function(sig=0.1, min.slot.sig=3, useSampleAvgs=TRUE,from='max',to='mean',useSD=NULL,poisScaleCoeff=NULL,hideCalc=TRUE){
       if (private$modelType!='poisfe'&!is.null(poisScaleCoeff)){
         warning('argument poisScaleCoeff is ignored due to invalid model type')
         poisScaleCoeff <- NULL
@@ -186,6 +191,11 @@ ESAModel <- R6Class(
         resAll[,(poisIrrCols):=lapply(.SD,exp),.SDcols=c(slots,outCols)]
         resAll[,(paste0(c(slots,outCols),'_pois_irr_perc')):=lapply(.SD,function(x) (x-1)*100),
                .SDcols=(poisIrrCols)]
+      }
+      # check if need to hide certain columns from the results table
+      if (hideCalc){
+        resAll[,c("count_na","has_pos","has_neg","should_retain","slot_avg",
+                  "slot_min","slot_max","is_factor"):=NULL]
       }
       return(resAll)
     },
@@ -412,12 +422,23 @@ ESAModel <- R6Class(
       }
       return(allPlots)
     },
+    #' @description Retrieve the datasets which were used in model estimation.
+    #' note this henceforth means that these are the complete cases of all variables
+    #' included in the model.
+    #' @return list of data.table objects.
     getRegressionDatasets=function(){
       return(private$modelRegression.datasets)
     },
+    #' @description Retrive the sample averages of variables in the model.
+    #' @param bo a boolean.
+    #' @return list of data.table objects.
     getSampleAvgs=function(bo=TRUE){
       return(private$model.sample.averages(bo))
     },
+    #' @description Return a regression table based of the fixest implementation.
+    #' This combines all of the different models (e.g. across slots).
+    #' @param exclusions - character vector of variables to exclude from the table
+    #' @return data.frame
     getRegressionTable=function(exclusions=NULL){
       u <- private$modelObjects
       if (length(u)==0|is.null(u)) return(NULL)
@@ -451,12 +472,17 @@ ESAModel <- R6Class(
       if (!is.null(bic)) extralineList[['^_BIC']] <- bic
       # return a data.frame via fixest's etable method, with some additional stats
       return(etable(u,drop=exclude,
-                    extraline=extralineList,
+                    extralines=extralineList,
                     dict = subRepl))
     },
+    #' @description Returns a table of derived average marginal effects. Note
+    #' that this requires that the user has specified to derive them on initialization.
+    #' @return data.table or NULL.
     getAMEs = function(){
       return(private$modelAMEs)
     },
+    #' @description Return a list of fixest model objects.
+    #' @return list of fixest model objects.
     getModelObjs=function(){
       return(private$modelObjects)
     }
@@ -471,6 +497,31 @@ ESAModel <- R6Class(
     modelObjects=list(),
     modelAMEs=NULL,
     fixedEffects=NULL,
+    dependent=NULL,
+    modelIdentifiers=NULL,
+    #' @description check whether
+    doesCustomDepExist=function(obj){
+      # check that the dependent private attribute is not null
+      if (is.null(private$dependent)) stop("The private attribute dependent cannot be null")
+      # retrieve the model suffix e.g. acuity x queue
+      modelSuff <- private$getModelSuff(obj)
+      slots <- lapply(obj$getSlots(), function(x) x$slotID)
+      # check whether the dependent variable exists across all slots
+      proposedDeps <- paste0(slots,"_",modelSuff,"_",private$dependent)
+      doProposedExist <- Reduce("&", lapply(proposedDeps, function(x) x%in%colnames(obj$data)))
+      response <- list(
+        doProposedExist = doProposedExist,
+        depVarPrefix = paste0(slots,"_",modelSuff)
+      )
+      return(response)
+    },
+    #' @description Return a list of formulas for each of the slot models
+    #' @param obj ESAEDAggregated
+    #' @param bedOccupancy character vector of bed occupancy variables
+    #' @param slotVars character vector of slot-based variables
+    #' @param nonSlotVars character vector of non-slot-based variables
+    #' @param fixedEffects character vector of fixed effects
+    #' @return list of formula objects
     getFormulas=function(obj, bedOccupancy=NULL, slotVars=NULL, nonSlotVars=NULL,fixedEffects=NULL){
       # method to get formulas for the various slot models. return labeled
       # list containing a formula object.
@@ -478,18 +529,28 @@ ESAModel <- R6Class(
       acuity <- obj$getAcuity()
       slots <- obj$getSlots()
       # model suffix (ie acuity x queue)
-
       model.suff <- private$getModelSuff(obj)
       otherAcuities <- acuity$other.acuities()
       formuli <- list()
       # iterate through the slots
       for (slot in slots){
-        dep <- paste0(slot$slotID,'_',model.suff)
-        # get other acuities
-        otherAccsPrefix <- paste0(slot$slotID, ifelse(is.null(queue),'', paste0('_', queue$name)), '_')
-        indep.otheraccs <- paste0(otherAccsPrefix, otherAcuities)
-        indep.slots <- unlist(lapply(slotVars, function(x) paste0(dep,'_',x)))
-        indep.all <- c(indep.otheraccs,indep.slots,bedOccupancy,nonSlotVars)
+        if (is.null(private$dependent)){
+          dep <- paste0(slot$slotID,'_',model.suff)
+          # get other acuities
+          if (!is.null(otherAcuities)){
+            otherAccsPrefix <- paste0(slot$slotID, ifelse(is.null(queue),'', paste0('_', queue$name)), '_')
+            indep.otheraccs <- paste0(otherAccsPrefix, otherAcuities)
+          } else {
+            indep.otheraccs <- NULL
+          }
+          indep.slots <- unlist(lapply(slotVars, function(x) paste0(dep,'_',x)))
+          indep.all <- c(indep.otheraccs,indep.slots,bedOccupancy,nonSlotVars)
+        } else {
+          dep <- paste0(slot$slotID, "_", model.suff, "_", private$dependent)
+          dummy <- paste0(slot$slotID,'_',model.suff)
+          indep.slots <- unlist(lapply(slotVars,function(x) paste0(dummy,'_',x)))
+          indep.all <- c(indep.slots, bedOccupancy, nonSlotVars)
+        }
         # check all variables are in the data
         #if(!searchWithin(search=c(dep,indep.all), colnames(obj$data),quietly=FALSE)){
         #  stop('Could not identify a variable in the data.')
@@ -506,10 +567,29 @@ ESAModel <- R6Class(
                         'model_key')
       reg.df <- data.table::copy(obj$data)
       reg.df[, paste0(obj$getProviderSite()) := as.factor(reg.df[[obj$getProviderSite()]])]
+      # warning that the package has not been tested with 1 site
+      if (length(unique(reg.df[[obj$getProviderSite()]])) == 1){
+        warning("The model has not been verified in the situation of one fixed effect (site).")
+      }
       # force clustering on final_date if there is only one site
       if (length(unique(reg.df[[obj$getProviderSite()]]))==1 & is.null(cl) & is.null(fixedEffects)){
         cl <- 'final_date'
       }
+      # check whether the proposed dependent variables exist; if not create them
+      # Note this works on the basis that the dependent is not a slot-specific var
+      if (!is.null(private$dependent)){
+        customDepHandle <- private$doesCustomDepExist(obj = obj)
+        if (!customDepHandle[["doProposedExist"]]){
+          # check whether the dependent variable exists in the data
+          if (!private$dependent %in% colnames(reg.df)) stop(paste0("Could not find ", private$dependent, " in the data."))
+          # create the required variables
+          depVarPrefix <- customDepHandle[["depVarPrefix"]]
+          newDepVar <- paste0(depVarPrefix, "_", private$dependent)
+          reg.df[, (newDepVar) := lapply(1:length(newDepVar), function(i) reg.df[[private$dependent]])]
+        }
+      }
+      # the names of all formuli are used as the key for each model
+      private$modelIdentifiers <- names(formuli)
       # run all the models within the list of formuli
       model.results <- lapply(names(formuli), function(x){
         model <- tryCatch({
@@ -599,7 +679,8 @@ ESAModel <- R6Class(
       # for complete cases across all the variables included in the formula
       # is how this is achieved.
       model.complete.df <- lapply(names(formuli), function(x){
-        model.df <- data.table::copy(obj$data)
+        #model.df <- data.table::copy(obj$data)
+        model.df <- data.table::copy(reg.df)
         model.vars <- all.vars(formuli[[x]])
         cols.retain <- unique(c(obj$getProviderSite(),'final_date',model.vars))
         model.df <- model.df[,..cols.retain]
@@ -613,6 +694,10 @@ ESAModel <- R6Class(
       # the complete cases dataset derived above to calculate
       listAMES <- list()
       if (withAME){
+        # check whether marginaleffects package is installed
+        if (!requireNamespace("marginaleffects", quietly=TRUE)){
+          stop("The package marginaleffects is required to derive.")
+        }
         # loop through models
         for (nm in names(private$modelObjects)){
           # get model object
@@ -657,23 +742,27 @@ ESAModel <- R6Class(
       model.slots <- unlist(lapply(private$esaEDObj$getSlots(), function(x) x$slotID))
       df[, varname := gsub(paste(paste0(model.slots,'_'),collapse='|',sep=''), '',factor)]
       df[, varname := gsub(paste0(model.suff,'_'),'',varname)]
-      # reshape wide, retaining only estimate and p value
+      # reshape wide
       df[, model_grouper := gsub(paste0('_',model.suff),'',model_key)]
       # get unique list of models identified
       modelsAvail <- unique(df$model_grouper)
-      wide <- dcast(df, formula=varname~model_grouper, value.var=c('estimate', 'p_value'), fill=NA)
+      wide <- dcast(df, formula=varname~model_grouper, fill=NA,
+                    value.var=c('estimate', 'p_value',"lower_ci_90","upper_ci_90",
+                                "lower_ci_95","upper_ci_95"))
       # if some slots did not obtain any results, create empty NA column.
-      modelsUnavail <- model.slots[!model.slots %in% modelsAvail]
-      if (length(modelsUnavail)>0){
-        colsModelsUnavail <- c(paste0('estimate_',modelsUnavail),paste0('p_value_',modelsUnavail))
+      modelsShouldAvail <- gsub(paste0("_", model.suff), "", private$modelIdentifiers)
+      modelsUnavail <- modelsShouldAvail[!modelsShouldAvail %in% modelsAvail]
+      if (length(modelsUnavail) > 0){
+        colsModelsUnavail <- c(paste0("estimate_",modelsUnavail),paste0("p_value_",modelsUnavail))
         wide[, (colsModelsUnavail) := NA]
       }
-      pval.cols <- paste0('p_value_', unique(df[['model_grouper']]))
+      pval.cols <- paste0('p_value_', modelsShouldAvail)# unique(df[['model_grouper']]))
       pval.cols.out <- paste0(pval.cols,'_flag')
       # create flags whether p value is less than significance level define
       wide[, (pval.cols.out) := lapply(.SD, function(x) fcase(x<sig,1,default=NA)), .SDcols=pval.cols]
+      if (length(model.slots) != length(modelsShouldAvail)) stop("unequal lengths")
       # multiply each slot estimate by whether estimate is significant or not
-      wide[, (model.slots) := lapply(model.slots, function(x) wide[[paste0('estimate_',x)]]*wide[[paste0('p_value_',x,'_flag')]])]
+      wide[, (model.slots) := lapply(modelsShouldAvail, function(x) eval(parse(text=paste0("estimate_",x))) * eval(parse(text=paste0("p_value_", x, "_flag"))))]
       # create flag if meets the minumum number of significant if if count NA <
       wide[, count_na := Reduce('+', lapply(.SD, is.na)), .SDcols=model.slots]
       # count how many positive/negative coefficients there are for consistency
@@ -743,7 +832,12 @@ ESAModel <- R6Class(
         )]
         # remove .mean, .max, .min from varname
         stats[, varname := gsub('\\.mean|\\.max|\\.min|\\.sd', '', varname)]
-        slotsName <- gsub(pattern=private$getModelSuff(private$esaEDObj),'',x)
+        # remove the model suffix, as well as the dependent variable if provided
+        nameCleanStr <- private$getModelSuff(private$esaEDObj)
+        if (!is.null(private$dependent)){
+          nameCleanStr <- paste0(nameCleanStr, "_", private$dependent)
+        }
+        slotsName <- gsub(pattern=nameCleanStr, "", x)
         stats[, metric := paste0(slotsName,metric)]
         # reshape wide so that min, max and mean are in seperate columns
         statsWide <- dcast(stats, formula=varname~metric, value.var=c('value'), fill=NA)
